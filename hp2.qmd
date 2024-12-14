@@ -1,0 +1,228 @@
+---
+title: "hp2"
+author: "Wanyu Jiang"
+format: 
+  html: 
+  code-fold: true
+  code-tools: true
+execute:
+  echo: false
+jupyter: python3
+---
+
+```{r}
+## Introduction
+# The dataset chosen for this project is CoLA Corpus of Linguistic Acceptability, which is a dataset contains sentences annotated with acceptability judgments, sourced from linguistic literature. It is divided into in-domain and out-of-domain subsets to assess generalizability. 
+
+# The "Neural Network Acceptability Judgments" paper created dataset with a compilation of sentences from diverse linguistic sources, annotated with binary labels for grammaticality. There is a broad representation of syntactic phenomena for linguistic analysis. It provides a benchmark for assessing machine learning models' performance and their generalization capabilities.
+
+# The COLA dataset contains three subsets: 
+# in_domain_train.tsv: Training data from in-domain linguistic sources. 
+# in_domain_dev.tsv: Validation data from the same in-domain sources.
+# out_of_domain_dev.tsv: Validation data from out-of-domain sources, testing generalization.
+# This report will focus on analyzing all three datasets to explore grammatical patterns and relationships.
+# Link Address: https://nyu-mll.github.io/CoLA/ 
+```
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the code"
+#| warning: false
+```
+
+```{r}
+## Data Dictionary of the CoLA dataset
+# 1.source: The origin of the sentence (e.g., linguistics literature, textbook).
+# 2.sentence acceptability: Binary labels (1 = acceptable and 0 = unacceptable).
+# 3.sentence: The linguistic sentence example being evaluated for grammaticality
+```
+
+```{r}
+# Load necessary library
+installed.packages("tidyr")
+installed.packages("tidyverse")
+installed.packages("tidytext")
+installed.packages("ggplot2")
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(tidytext)
+```
+
+```{r}
+## Import data
+library(here)
+# Import and load training data from in-domain linguistic sources as df_train, validation data from the same in-domain sources as df_dev, validation data from out-of-domain sources as df_out_domain
+df_train <- "cola_public/raw/in_domain_train.tsv"
+head(df_train)
+df_dev <- "cola_public/raw/in_domain_dev.tsv"
+head(df_dev)
+df_out_domain <- "cola_public/raw/out_of_domain_dev.tsv"
+head(df_out_domain)
+
+# Describe data variables
+str(df_train)
+str(df_dev)
+str(df_out_domain)
+
+# Load three dataset
+df_cola_train <- read_tsv(df_train, col_names = FALSE)
+df_cola_dev <- read_tsv(df_dev, col_names = FALSE)
+df_cola_out_domain <- read_tsv(df_out_domain, col_names = FALSE)
+
+# Inspect the structure of the dataset
+print(glimpse(df_cola_train))
+print(glimpse(df_cola_dev))
+print(glimpse(df_cola_out_domain))
+```
+
+```{r}
+## Data Cleaning and Tidying
+```
+
+```{r}
+# Rename variables
+rename_columns <- function(data) {
+  data |>
+    rename(
+      source = X1, acceptability = X2, sentence = X3
+    )
+}
+
+df_cola_train <- rename_columns(df_cola_train)
+df_cola_dev <- rename_columns(df_cola_dev)
+df_cola_out_domain <- rename_columns(df_cola_out_domain)
+```
+
+```{r}
+# Check for missing or malformed data
+check_missing_data <- function(data, name) {
+  missing_data <- data |> summarise_all(~ sum(is.na(.)))
+  print(paste("Missing data in", name, ":"))
+  print(missing_data)
+}
+
+check_missing_data(df_cola_train, "Training Data")
+check_missing_data(df_cola_dev, "In-Domain Dev Data")
+check_missing_data(df_cola_out_domain, "Out-of-Domain Dev Data")
+```
+
+```{r}
+# Explore the distribution of acceptability in all datasets
+acceptability_distribution <- function(data, name) {
+  distribution <- data |>
+    group_by(acceptability) |>
+    summarise(count = n()) |>
+    mutate(proportion = count / sum(count))
+  print(paste("Acceptability distribution in", name, ":"))
+  print(distribution)
+}
+
+acceptability_distribution(df_cola_train, "Training Data")
+acceptability_distribution(df_cola_dev, "In-Domain Dev Data")
+acceptability_distribution(df_cola_out_domain, "Out-of-Domain Dev Data")
+```
+
+```{r}
+# Save the cleaned datasets as RDS files for reproducibility
+write_rds(df_cola_train, "cola_train_cleaned.rds")
+write_rds(df_cola_dev, "cola_dev_cleaned.rds")
+write_rds(df_cola_out_domain, "cola_out_domain_cleaned.rds")
+```
+
+```{r}
+# Question 1: What is the distribution of acceptable vs. unacceptable sentences in the dataset? What is the cominant class (acceptable/unacceptable) in the dataset, which will imact further analysis?
+df_cola_train |>
+  ggplot(aes(x = factor(acceptability), fill = factor(acceptability))) +
+  geom_bar() +
+  scale_fill_manual(values = c("pink", "lightblue"),
+                    labels = c("Unacceptable", "Acceptable")) +
+  labs(title = "Distribution of Acceptability in Training Data",
+       x = "Acceptability",
+       y = "Count",
+       fill = "Label") +
+  theme_minimal()
+# The graph shows that most sentences are labeled as acceptable in the dataset. In this way, the dataset may favor models that predict acceptability over unacceptability. During the real application of experiment, researchers should pay more attention on ensuring models perform well on the less frequent (unacceptable) class.
+```
+
+```{r}
+# Question 2: What is the change or the trend in acceptability proportion across domains
+df_cola_combined |>
+  group_by(domain, acceptability) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(proportion = count / sum(count)) |>
+  ggplot(aes(x = domain, y = proportion, color = factor(acceptability), group = acceptability)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("#E69F00", "#56B4E9"),
+                    labels = c("Unacceptable", "Acceptable")) +
+  labs(title = "Trends in Acceptability Proportion by Domain",
+       x = "Domain",
+       y = "Proportion",
+       color = "Label") +
+  theme_minimal()
+# The line chart shows that the proportion of acceptable sentences is higher in the in-domain dataset than in the out-of-domain dataset. This suggests that the in-domain dataset is cleaner or follows stricter grammatical rules compared to the out-of-domain dataset, which likely includes more varied and challenging sentences. This difference will affect model generalization.
+```
+
+```{r}
+# Question 3: How do in-domain and out-of-domain datasets differ in acceptability distributions?
+# Combine in-domain and out-of-domain data
+df_cola_combined <- df_cola_dev |>
+  mutate(domain = "In-Domain") |>
+  bind_rows(df_cola_out_domain |> mutate(domain = "Out-of-Domain"))
+
+# Visualize acceptability proportions by domain
+df_cola_combined |>
+  group_by(domain, acceptability) |>
+  summarise(count = n(), .groups = 'drop') |>
+  mutate(proportion = count / sum(count)) |>
+  ggplot(aes(x = domain, y = proportion, fill = factor(acceptability))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("pink", "lightblue"),
+                    labels = c("Unacceptable", "Acceptable")) +
+  labs(title = "Acceptability Proportions by Domain",
+       x = "Domain",
+       y = "Proportion",
+       fill = "Label") +
+  theme_minimal()
+# The bar chart shows that the in-domain dataset has a significantly higher proportion of acceptable sentences compared to the out-of-domain dataset. Conversely, the out-of-domain dataset contains a relatively higher proportion of unacceptable sentences. This indicates the need to treat these datasets separately when evaluating model performance, as the out-of-domain dataset is likely more challenging.
+```
+
+```{r}
+# Question 4: What is the contribution of sources to unacceptable sentences? What linguistic/syntactic phenomena (e.g. agreement, word order) are most frequently associated with unacceptable sentences?
+df_cola_combined |>
+  filter(acceptability == 0) |>
+  group_by(domain, source) |>
+  summarise(count = n(), .groups = 'drop') %>%
+  top_n(10, count) |>
+  ggplot(aes(x = reorder(source, count), y = count, fill = domain)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  scale_fill_manual(values = c("pink", "lightblue")) +
+  labs(title = "Top 10 Sources of Unacceptable Sentences by Domain",
+       x = "Source",
+       y = "Count",
+       fill = "Domain") +
+  theme_minimal()
+# The bar chart shows the top 10 sources contributing to unacceptable sentences, including swb04, ks08, clc95, etc. These sources likely represent linguistic phenomena that challenge native speaker judgments or violate grammatical norms.
+```
+
+```{r}
+## Conclusion
+# This analysis report explored the Corpus of Linguistic Acceptability (CoLA) dataset with a focus on linguistic acceptability judgments. The main findings include:
+# There is a strong class imbalance favoring acceptable sentences, which indicates that there might be potential challenges for machine learning models in recognizing unacceptable cases.
+# There is a notable difference in acceptability proportions between in-domain and out-of-domain datasets, indicating the importance of testing generalization across varied linguistic contexts.
+# Certain sources contributed to unacceptable sentences, which is caused by challenging linguistic phenomena such as syntactic agreement or word order violations.
+# Trends in acceptability proportions across domains indicates a need to tailor models to handle domain-specific variations effectively.
+# Overall, these report analysis could potentially provides some actionable guidance for improving linguistic datasets and computational models mentioned int the paper. 
+```
+
+```{r}
+# Reference
+@article{warstadt2018neural,
+    title={Neural Network Acceptability Judgments},
+    author={Warstadt, Alex and Singh, Amanpreet and Bowman, Samuel R},
+    journal={arXiv preprint arXiv:1805.12471},
+    year={2018}
+}
+```
